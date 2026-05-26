@@ -2,7 +2,7 @@ name: 台股籌碼助理每日更新
 
 on:
   schedule:
-    - cron: '0 14 * * 1-5'  # 台灣時間 22:00
+    - cron: '0 14 * * 1-5'
   workflow_dispatch:
 
 jobs:
@@ -50,7 +50,6 @@ jobs:
           DATE=$(date '+%Y%m%d')
           echo "目前台灣日期：$DATE"
           echo $DATE > data/today.txt
-          # 判斷是否為週末，若是則往回找最近交易日
           DOW=$(date '+%u')
           if [ "$DOW" = "6" ]; then
             DATE=$(date -d '1 day ago' '+%Y%m%d')
