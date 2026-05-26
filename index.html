@@ -96,9 +96,6 @@ canvas.spark { display:block; }
 
 <div class="container">
 
-  <!-- 日期切換 -->
-  <div id="date-switcher"></div>
-
   <!-- 連三日警示 -->
   <div class="alert-banner" id="alert-banner">
     <h3>🔔 連三日上榜警示</h3>
@@ -318,30 +315,6 @@ function loadMarket() {
 }
 
 const BASE_URL = 'https://raw.githubusercontent.com/s19920319-sudo/stock-monitor/main/';
-let currentDate = 'latest';
-
-function formatDate(d) {
-  return d.slice(0,4) + '/' + d.slice(4,6) + '/' + d.slice(6,8);
-}
-
-function buildDateButtons(dates, active) {
-  if (!dates || dates.length === 0) return '';
-  return '<div style="display:flex;gap:8px;padding:12px 16px;background:#faf8f4;border-bottom:1px solid var(--border)">'
-    + '<span style="font-size:0.78rem;color:var(--muted);margin-top:4px">查看日期：</span>'
-    + dates.map(d => {
-        const label = d === 'latest' ? '最新' : formatDate(d);
-        const active_style = d === active
-          ? 'background:var(--gold2);color:#fff;'
-          : 'background:#fff;color:var(--text);';
-        return `<button onclick="switchDate('${d}')" style="${active_style}border:1px solid var(--border);padding:4px 12px;border-radius:6px;font-size:0.78rem;cursor:pointer">${label}</button>`;
-      }).join('')
-    + '</div>';
-}
-
-function switchDate(date) {
-  currentDate = date;
-  loadData();
-}
 
 function loadPrices() {
   fetch(BASE_URL + 'prices.json?t=' + Date.now())
@@ -353,15 +326,12 @@ function loadPrices() {
 }
 
 function loadData() {
-  const filename = currentDate === 'latest' ? 'result.json' : `result_${currentDate}.json`;
-  const priceFile = currentDate === 'latest' ? 'prices.json' : `prices_${currentDate}.json`;
-
-  fetch(BASE_URL + priceFile + '?t=' + Date.now())
+  fetch(BASE_URL + 'prices.json?t=' + Date.now())
     .then(r => r.json())
     .then(d => { priceData = d; })
     .catch(() => {})
     .finally(() => {
-      fetch(BASE_URL + filename + '?t=' + Date.now())
+      fetch(BASE_URL + 'result.json?t=' + Date.now())
     .then(r => r.json())
     .then(d => {
       const allAlerts = [...(d['連三日買超'] || []), ...(d['連三日賣超'] || [])];
@@ -391,16 +361,6 @@ function loadData() {
       document.getElementById('update-time').textContent = '更新時間：' + (d['更新時間'] || '—');
       document.getElementById('data-date').textContent   = '資料日期：' + (d['資料日期'] || '—');
       document.getElementById('broker-date').textContent  = d['資料日期'] || '—';
-
-      // 建立日期切換按鈕
-      const dateStr = d['資料日期'];
-      if (dateStr) {
-        const d1 = dateStr;
-        const d2 = String(parseInt(dateStr) - 1);
-        const d3 = String(parseInt(dateStr) - 2);
-        const dates = ['latest', d1, d2, d3];
-        document.getElementById('date-switcher').innerHTML = buildDateButtons(dates, currentDate);
-      }
 
       setTimeout(renderAllSparklines, 100);
     })
