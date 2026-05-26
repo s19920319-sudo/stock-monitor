@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>台股籌碼監控助理</title>
+<style>
+:root {
+  --bg:#f5f0e8; --bg2:#ede8de; --card:#ffffff; --border:#ddd6c8;
+  --gold:#b8860b; --gold2:#d4a017; --green:#1a7a3f; --green-bg:#edf7f1;
+  --red:#c0392b; --red-bg:#fdf0ee; --text:#2c2416; --muted:#8a7a66;
+  --header:#2c2416; --shadow:0 2px 12px rgba(0,0,0,0.08);
+}
+* { box-sizing:border-box; margin:0; padding:0; }
+body { background:var(--bg); color:var(--text); font-family:'Segoe UI','Microsoft JhengHei',sans-serif; }
+header { background:var(--header); padding:18px 32px; display:flex; align-items:center; justify-content:space-between; border-bottom:3px solid var(--gold2); }
+.header-left { display:flex; align-items:center; gap:12px; }
+.header-left h1 { font-size:1.25rem; color:#f5f0e8; letter-spacing:2px; font-weight:600; }
+.badge { background:var(--gold2); color:var(--header); font-size:0.7rem; font-weight:700; padding:3px 8px; border-radius:4px; }
+#update-time { font-size:0.78rem; color:#a89880; }
+.market-bar { background:var(--bg2); border-bottom:1px solid var(--border); padding:10px 32px; display:flex; align-items:center; gap:32px; }
+.market-label { font-size:0.78rem; color:var(--muted); margin-right:6px; }
+.market-val { font-size:1rem; font-weight:700; }
+.market-chg { font-size:0.8rem; font-weight:600; padding:2px 8px; border-radius:4px; }
+.up-bg { background:var(--green-bg); color:var(--green); }
+.down-bg { background:var(--red-bg); color:var(--red); }
+.container { max-width:1280px; margin:0 auto; padding:24px; }
+.alert-banner { background:#fff8e6; border:1.5px solid var(--gold2); border-left:5px solid var(--gold2); border-radius:8px; padding:14px 20px; margin-bottom:24px; display:none; }
+.alert-banner.show { display:block; }
+.alert-banner h3 { color:var(--gold); font-size:0.88rem; margin-bottom:10px; font-weight:700; }
+.alert-tags { display:flex; flex-wrap:wrap; gap:8px; }
+.alert-tag { background:#fff3cc; border:1px solid var(--gold2); color:var(--gold); padding:4px 14px; border-radius:20px; font-size:0.82rem; font-weight:700; animation:pulse 2s infinite; }
+@keyframes pulse { 0%,100%{box-shadow:0 0 0 0 rgba(212,160,23,0.4)} 50%{box-shadow:0 0 0 6px rgba(212,160,23,0)} }
+.section-title { font-size:0.8rem; font-weight:700; color:var(--muted); letter-spacing:2px; margin-bottom:12px; margin-top:28px; border-left:3px solid var(--gold2); padding-left:10px; }
+.grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+@media(max-width:768px){ .grid-2{grid-template-columns:1fr} }
+.card { background:var(--card); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow); overflow:hidden; }
+.card-header { padding:14px 20px; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid var(--border); }
+.card-header.buy       { background:linear-gradient(90deg,#e8f5ee,#fff); border-top:3px solid var(--green); }
+.card-header.sell      { background:linear-gradient(90deg,#fdf0ee,#fff); border-top:3px solid var(--red); }
+.card-header.inst-buy  { background:linear-gradient(90deg,#eef4ff,#fff); border-top:3px solid #2563eb; }
+.card-header.inst-sell { background:linear-gradient(90deg,#fdf4ff,#fff); border-top:3px solid #9333ea; }
+.card-header.trust-buy  { background:linear-gradient(90deg,#e8f5ee,#fff); border-top:3px solid #059669; }
+.card-header.trust-sell { background:linear-gradient(90deg,#fdf4ff,#fff); border-top:3px solid #9333ea; }
+.card-header.signal    { background:linear-gradient(90deg,#fff8e6,#fff); border-top:3px solid var(--gold2); }
+.card-title { font-size:0.95rem; font-weight:700; }
+.card-title.buy        { color:var(--green); }
+.card-title.sell       { color:var(--red); }
+.card-title.inst-buy   { color:#2563eb; }
+.card-title.inst-sell  { color:#9333ea; }
+.card-title.trust-buy  { color:#059669; }
+.card-title.trust-sell { color:#9333ea; }
+.card-title.signal     { color:var(--gold); }
+.card-date { font-size:0.72rem; color:var(--muted); }
+table { width:100%; border-collapse:collapse; }
+th { padding:9px 16px; font-size:0.72rem; color:var(--muted); text-align:left; border-bottom:1px solid var(--border); font-weight:600; background:#faf8f4; }
+td { padding:10px 16px; font-size:0.85rem; border-bottom:1px solid #f0ece4; vertical-align:middle; }
+tr:last-child td { border-bottom:none; }
+tr:hover td { background:#faf8f4; }
+.rank { width:26px; height:26px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-weight:700; font-size:0.78rem; }
+.rank-1{background:#d4a017;color:#fff} .rank-2{background:#9e9e9e;color:#fff} .rank-3{background:#a0522d;color:#fff} .rank-n{background:#ede8de;color:var(--muted)}
+.stock-id { font-weight:700; color:var(--gold); font-size:0.9rem; }
+.stock-name { color:var(--text); margin-left:6px; }
+.vol-buy { color:var(--green); font-weight:700; }
+.vol-sell { color:var(--red); font-weight:700; }
+.vol-inst-buy { color:#2563eb; font-weight:700; }
+.vol-inst-sell { color:#9333ea; font-weight:700; }
+.badge-consec { display:inline-block; background:#fff3cc; border:1px solid var(--gold2); color:var(--gold); font-size:0.68rem; padding:1px 7px; border-radius:10px; margin-left:6px; font-weight:700; }
+.tag { display:inline-block; background:#eef4ff; border:1px solid #2563eb; color:#2563eb; font-size:0.7rem; padding:2px 8px; border-radius:10px; margin-right:4px; }
+.price-open  { font-size:0.8rem; color:var(--muted); }
+.price-close { font-size:0.88rem; font-weight:700; }
+.chg-up   { color:var(--green); font-weight:700; font-size:0.82rem; }
+.chg-down { color:var(--red);   font-weight:700; font-size:0.82rem; }
+.empty { padding:36px; text-align:center; color:var(--muted); font-size:0.88rem; }
+.footer-bar { margin-top:28px; padding:12px 20px; background:var(--card); border:1px solid var(--border); border-radius:8px; display:flex; justify-content:space-between; font-size:0.76rem; color:var(--muted); }
+.dot-live { width:7px; height:7px; border-radius:50%; background:var(--green); display:inline-block; margin-right:6px; animation:blink 2s infinite; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+canvas.spark { display:block; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <h1>📊 台股籌碼監控助理</h1>
+    <span class="badge">LIVE</span>
+  </div>
+  <div id="update-time">載入中...</div>
+</header>
+
+<div class="market-bar">
+  <div><span class="market-label">加權指數</span><span class="market-val" id="taiex-val">—</span> <span class="market-chg" id="taiex-chg"></span></div>
+  <div><span class="market-label">櫃買指數</span><span class="market-val" id="otc-val">—</span></div>
+  <div style="margin-left:auto;font-size:0.78rem;color:var(--muted)" id="market-status"></div>
+</div>
+
+<div class="container">
+
+  <!-- 連三日警示 -->
+  <div class="alert-banner" id="alert-banner">
+    <h3>🔔 連三日上榜警示</h3>
+    <div class="alert-tags" id="alert-tags"></div>
+  </div>
+
+  <!-- 綜合訊號 -->
+  <div class="section-title">⚡ 綜合買進訊號</div>
+  <div class="card" style="margin-bottom:8px">
+    <div class="card-header signal">
+      <span class="card-title signal">法人買超 + 籌碼集中（兩燈同亮）</span>
+      <span class="card-date">集保戶數減少 × 法人買超同時出現</span>
+    </div>
+    <div id="combined-table"><div class="empty">計算中...</div></div>
+  </div>
+
+  <!-- 外資榜單 -->
+  <div class="section-title">外資籌碼</div>
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-header buy">
+        <span class="card-title buy">📈 外資買超前五</span>
+        <span class="card-date" id="broker-date">—</span>
+      </div>
+      <div id="broker-buy-table"><div class="empty">資料載入中...</div></div>
+    </div>
+    <div class="card">
+      <div class="card-header sell">
+        <span class="card-title sell">📉 外資賣超前五</span>
+      </div>
+      <div id="broker-sell-table"><div class="empty">資料載入中...</div></div>
+    </div>
+  </div>
+
+  <!-- 三大法人榜單 -->
+  <div class="section-title">三大法人籌碼</div>
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-header inst-buy">
+        <span class="card-title inst-buy">🏦 三大法人買超前五</span>
+      </div>
+      <div id="inst-buy-table"><div class="empty">資料載入中...</div></div>
+    </div>
+    <div class="card">
+      <div class="card-header inst-sell">
+        <span class="card-title inst-sell">🏦 三大法人賣超前五</span>
+      </div>
+      <div id="inst-sell-table"><div class="empty">資料載入中...</div></div>
+    </div>
+  </div>
+
+  <!-- 投信榜單 -->
+  <div class="section-title">投信籌碼</div>
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-header trust-buy">
+        <span class="card-title trust-buy">📊 投信買超前五</span>
+      </div>
+      <div id="trust-buy-table"><div class="empty">資料載入中...</div></div>
+    </div>
+    <div class="card">
+      <div class="card-header trust-sell">
+        <span class="card-title trust-sell">📊 投信賣超前五</span>
+      </div>
+      <div id="trust-sell-table"><div class="empty">資料載入中...</div></div>
+    </div>
+  </div>
+
+  <div class="footer-bar">
+    <div><span class="dot-live"></span>資料來源：台灣證券交易所 TWSE ／ 每日 22:00 自動更新</div>
+    <div id="data-date">—</div>
+  </div>
+</div>
+
+<script>
+const consecutiveIds = new Set();
+let priceData = {};
+
+function rankClass(n) {
+  if (n === 1) return 'rank rank-1';
+  if (n === 2) return 'rank rank-2';
+  if (n === 3) return 'rank rank-3';
+  return 'rank rank-n';
+}
+
+function drawSparkline(canvas, prices, isUp) {
+  if (!canvas || !prices || prices.length < 2) return;
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width, h = canvas.height;
+  ctx.clearRect(0, 0, w, h);
+  const mn = Math.min(...prices), mx = Math.max(...prices);
+  const rng = mx - mn || 1;
+  ctx.beginPath();
+  prices.forEach((p, i) => {
+    const x = (i / (prices.length - 1)) * w;
+    const y = h - ((p - mn) / rng) * (h - 4) - 2;
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  });
+  ctx.strokeStyle = isUp ? '#1a7a3f' : '#c0392b';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+}
+
+function renderAllSparklines() {
+  document.querySelectorAll('canvas.spark').forEach(c => {
+    const sid  = c.dataset.sid;
+    const isUp = c.dataset.isup === '1';
+    const trend = (priceData[sid] && priceData[sid]['走勢']) || [];
+    drawSparkline(c, trend, isUp);
+  });
+}
+
+function buildTable(data, type) {
+  if (!data || data.length === 0) return '<div class="empty">今日無資料</div>';
+  const isBuy = (type === 'buy' || type === 'inst-buy' || type === 'trust-buy');
+  const volClassMap = { 'buy': 'vol-buy', 'sell': 'vol-sell', 'inst-buy': 'vol-inst-buy', 'inst-sell': 'vol-inst-sell', 'trust-buy': 'vol-buy', 'trust-sell': 'vol-sell' };
+  const volClass = volClassMap[type] || 'vol-buy';
+  let html = '<table><thead><tr><th>排名</th><th>股票</th><th>' + (isBuy ? '買超張數' : '賣超張數') + '</th><th>開盤</th><th>收盤</th><th>漲跌</th><th>走勢</th></tr></thead><tbody>';
+  data.forEach(r => {
+    const sid   = r['股票代號'] || '';
+    const sname = r['股票名稱'] || '';
+    const vol   = r['買賣超張數'] || 0;
+    const badge = consecutiveIds.has(sid) ? '<span class="badge-consec">🔥連三日</span>' : '';
+    const sign  = isBuy ? '+' : '';
+    const p     = priceData[sid] || {};
+    const open  = p['開盤']  != null ? p['開盤'].toFixed(2)  : '—';
+    const close = p['收盤'] != null ? p['收盤'].toFixed(2) : '—';
+    const chg   = p['漲跌'];
+    const pct   = p['漲跌幅'];
+    const isUp  = chg != null ? chg >= 0 : true;
+    const chgStr = chg != null
+      ? '<span class="' + (isUp ? 'chg-up' : 'chg-down') + '">' + (isUp ? '▲' : '▼') + Math.abs(pct) + '%</span>'
+      : '—';
+    html += '<tr>'
+      + '<td><span class="' + rankClass(r['排名'] || 1) + '">' + (r['排名'] || 1) + '</span></td>'
+      + '<td><span class="stock-id">' + sid + '</span><span class="stock-name">' + sname + '</span>' + badge + '</td>'
+      + '<td><span class="' + volClass + '">' + sign + Number(vol).toLocaleString() + '</span></td>'
+      + '<td class="price-open">' + open + '</td>'
+      + '<td class="price-close">' + close + '</td>'
+      + '<td>' + chgStr + '</td>'
+      + '<td><canvas class="spark" data-sid="' + sid + '" data-isup="' + (isUp ? 1 : 0) + '" width="64" height="28"></canvas></td>'
+      + '</tr>';
+  });
+  html += '</tbody></table>';
+  return html;
+}
+
+function buildCombined(signals) {
+  if (!signals || signals.length === 0)
+    return '<div class="empty">今日無綜合訊號（需同時滿足：法人買超 + 集保戶數減少）</div>';
+  let html = '<table><thead><tr><th>股票</th><th>出現榜單</th><th>戶數變化</th></tr></thead><tbody>';
+  signals.forEach(s => {
+    const chg = s['戶數變化'] || 0;
+    const chgStr = '<span style="color:' + (chg < 0 ? 'var(--green)' : 'var(--red)') + ';font-weight:700">'
+      + (chg < 0 ? '▼' : '▲') + Math.abs(chg).toLocaleString() + ' 戶</span>';
+    const tags = (s['出現榜單'] || []).map(t => '<span class="tag">' + t + '</span>').join('');
+    html += '<tr>'
+      + '<td><span class="stock-id">' + s['股票代號'] + '</span>'
+      + '<span class="stock-name">' + s['股票名稱'] + '</span>'
+      + '<span class="badge-consec">⚡兩燈亮</span></td>'
+      + '<td>' + tags + '</td>'
+      + '<td>' + chgStr + '</td>'
+      + '</tr>';
+  });
+  return html + '</tbody></table>';
+}
+
+function loadMarket() {
+  fetch('https://openapi.twse.com.tw/v1/exchangeReport/FMTQIK')
+    .then(r => r.json())
+    .then(d => {
+      if (!d || !d.length) return;
+      const row = d[0];
+      const idx = parseFloat((row['發行量加權股價指數'] || '').replace(',', ''));
+      const chg = parseFloat((row['漲跌點數'] || '').replace(',', ''));
+      if (idx) {
+        document.getElementById('taiex-val').textContent = idx.toLocaleString();
+        const el = document.getElementById('taiex-chg');
+        el.textContent = (chg >= 0 ? '+' : '') + chg.toFixed(2);
+        el.className = 'market-chg ' + (chg >= 0 ? 'up-bg' : 'down-bg');
+      }
+    }).catch(() => {});
+}
+
+const BASE_URL = 'https://raw.githubusercontent.com/s19920319-sudo/stock-monitor/main/';
+
+function loadPrices() {
+  fetch(BASE_URL + 'prices.json?t=' + Date.now())
+    .then(r => r.json())
+    .then(d => {
+      priceData = d;
+      renderAllSparklines();
+    }).catch(() => {});
+}
+
+function loadData() {
+  // 先載入股價，再載入榜單，確保價格資料已就緒
+  fetch(BASE_URL + 'prices.json?t=' + Date.now())
+    .then(r => r.json())
+    .then(d => { priceData = d; })
+    .catch(() => {})
+    .finally(() => {
+      fetch(BASE_URL + 'result.json?t=' + Date.now())
+    .then(r => r.json())
+    .then(d => {
+      const allAlerts = [...(d['連三日買超'] || []), ...(d['連三日賣超'] || [])];
+      allAlerts.forEach(a => consecutiveIds.add(a['股票代號']));
+      if (allAlerts.length > 0) {
+        document.getElementById('alert-banner').classList.add('show');
+        document.getElementById('alert-tags').innerHTML = allAlerts.map(a =>
+          '<span class="alert-tag">🔥 ' + a['股票代號'] + ' ' + a['股票名稱'] + ' (' + a['類型'] + ')</span>'
+        ).join('');
+      }
+
+      document.getElementById('combined-table').innerHTML    = buildCombined(d['綜合訊號'] || []);
+      document.getElementById('broker-buy-table').innerHTML  = buildTable(d['外資買超'] || [],     'buy');
+      document.getElementById('broker-sell-table').innerHTML = buildTable(d['外資賣超'] || [],     'sell');
+      document.getElementById('inst-buy-table').innerHTML    = buildTable(d['三大法人買超'] || [], 'inst-buy');
+      document.getElementById('inst-sell-table').innerHTML   = buildTable(d['三大法人賣超'] || [], 'inst-sell');
+      document.getElementById('trust-buy-table').innerHTML   = buildTable(d['投信買超'] || [],     'trust-buy');
+      document.getElementById('trust-sell-table').innerHTML  = buildTable(d['投信賣超'] || [],     'trust-sell');
+
+      document.getElementById('update-time').textContent = '更新時間：' + (d['更新時間'] || '—');
+      document.getElementById('data-date').textContent   = '資料日期：' + (d['資料日期'] || '—');
+      document.getElementById('broker-date').textContent  = d['資料日期'] || '—';
+
+      setTimeout(renderAllSparklines, 100);
+    })
+    .catch(() => {
+      document.getElementById('update-time').textContent = '尚無資料，請執行 fetch_data.py 和 analyzer.py';
+    });
+  }); // end finally
+}
+
+loadMarket();
+loadData();
+loadPrices();
+setInterval(loadData,   60000);
+setInterval(loadPrices, 60000);
+setInterval(loadMarket, 300000);
+</script>
+</body>
+</html>
