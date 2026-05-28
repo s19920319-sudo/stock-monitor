@@ -2,7 +2,7 @@ name: 台股籌碼助理每日更新
 
 on:
   schedule:
-    - cron: '0 14 * * 1-5'
+    - cron: '0 14 * * 1-5'  # 台灣時間 22:00
   workflow_dispatch:
 
 jobs:
@@ -47,15 +47,31 @@ jobs:
       - name: Setup and check date
         run: |
           mkdir -p data
+          # 取得台灣時間
           DATE=$(date '+%Y%m%d')
-          echo "目前台灣日期：$DATE"
-          echo $DATE > data/today.txt
+          HOUR=$(date '+%H')
           DOW=$(date '+%u')
+          echo "台灣時間：$(date '+%Y-%m-%d %H:%M') 星期$DOW"
+
+          # 跳過週末
           if [ "$DOW" = "6" ]; then
             DATE=$(date -d '1 day ago' '+%Y%m%d')
           elif [ "$DOW" = "7" ]; then
             DATE=$(date -d '2 days ago' '+%Y%m%d')
           fi
+
+          # 若還沒收盤（15點前），抓前一個交易日
+          if [ "$HOUR" -lt "15" ]; then
+            DATE=$(date -d "$(echo $DATE | sed 's/\(....\)\(..\)\(..\)/\1-\2-\3/') 1 day ago" '+%Y%m%d')
+            # 再次跳過週末
+            DOW_CHECK=$(date -d "$(echo $DATE | sed 's/\(....\)\(..\)\(..\)/\1-\2-\3/')" '+%u')
+            if [ "$DOW_CHECK" = "6" ]; then
+              DATE=$(date -d "$(echo $DATE | sed 's/\(....\)\(..\)\(..\)/\1-\2-\3/') 1 day ago" '+%Y%m%d')
+            elif [ "$DOW_CHECK" = "7" ]; then
+              DATE=$(date -d "$(echo $DATE | sed 's/\(....\)\(..\)\(..\)/\1-\2-\3/') 2 days ago" '+%Y%m%d')
+            fi
+          fi
+
           echo "最近交易日：$DATE"
           echo $DATE > data/trading_date.txt
 
@@ -86,8 +102,19 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          DATE=$(cat data/trading_date.txt)
+
+          # 複製當日資料（帶日期）
           cp data/result.json result.json || true
           cp data/prices.json prices.json || true
-          git add result.json prices.json
+          cp data/result.json result_${DATE}.json || true
+          cp data/prices.json prices_${DATE}.json || true
+
+          # 只保留最近三天（刪除三天前的舊檔）
+          DATE_3AGO=$(date -d '3 days ago' '+%Y%m%d')
+          rm -f result_${DATE_3AGO}.json prices_${DATE_3AGO}.json || true
+
+          git add result.json prices.json result_*.json prices_*.json
           git diff --staged --quiet || git commit -m "每日更新：$(date '+%Y-%m-%d')"
           git push --force origin main
