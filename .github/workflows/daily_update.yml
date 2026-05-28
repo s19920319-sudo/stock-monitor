@@ -44,34 +44,39 @@ jobs:
           }
           PYEOF
 
-      - name: Setup and check date
+      - name: Setup date
         run: |
           mkdir -p data
+          # 台灣時間（TZ已設定為Asia/Taipei）
           HOUR=$(date '+%H')
           DOW=$(date '+%u')
           DATE=$(date '+%Y%m%d')
-          echo "台灣時間：$(date '+%Y-%m-%d %H:%M') 星期$DOW 小時$HOUR"
+          echo "現在台灣時間：$(date '+%Y-%m-%d %H:%M') 星期${DOW}"
 
-          # 若不是 22:00 後（排程時間），往回推一個交易日
+          # 排程在台灣22:00執行（HOUR=22）
+          # 手動執行可能是白天，往回推一天
           if [ "$HOUR" -lt "18" ]; then
             DATE=$(date -d 'yesterday' '+%Y%m%d')
             DOW=$(date -d 'yesterday' '+%u')
+            echo "白天執行，改抓昨天：$DATE"
           fi
 
-          # 跳過週末
+          # 若是週六(6)往回推1天到週五
           if [ "$DOW" = "6" ]; then
-            DATE=$(date -d "$DATE - 1 day" '+%Y%m%d')
-          elif [ "$DOW" = "7" ]; then
-            DATE=$(date -d "$DATE - 2 days" '+%Y%m%d')
+            DATE=$(date -d "${DATE:0:4}-${DATE:4:2}-${DATE:6:2} - 1 day" '+%Y%m%d')
+          fi
+          # 若是週日(7)往回推2天到週五
+          if [ "$DOW" = "7" ]; then
+            DATE=$(date -d "${DATE:0:4}-${DATE:4:2}-${DATE:6:2} - 2 days" '+%Y%m%d')
           fi
 
-          echo "最近交易日：$DATE"
-          echo $DATE > data/trading_date.txt
+          echo "最終交易日：$DATE"
+          echo "$DATE" > data/trading_date.txt
 
       - name: Fetch institutional data
         run: |
           DATE=$(cat data/trading_date.txt)
-          echo "抓取法人資料：$DATE"
+          echo "抓取法人資料日期：$DATE"
           python fetch_data.py --date $DATE
 
       - name: Fetch margin data
@@ -95,19 +100,8 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          DATE=$(cat data/trading_date.txt)
-
-          # 複製當日資料（帶日期）
           cp data/result.json result.json || true
           cp data/prices.json prices.json || true
-          cp data/result.json result_${DATE}.json || true
-          cp data/prices.json prices_${DATE}.json || true
-
-          # 只保留最近三天（刪除三天前的舊檔）
-          DATE_3AGO=$(date -d '3 days ago' '+%Y%m%d')
-          rm -f result_${DATE_3AGO}.json prices_${DATE_3AGO}.json || true
-
-          git add result.json prices.json result_*.json prices_*.json
+          git add result.json prices.json
           git diff --staged --quiet || git commit -m "每日更新：$(date '+%Y-%m-%d')"
           git push --force origin main
