@@ -47,29 +47,22 @@ jobs:
       - name: Setup and check date
         run: |
           mkdir -p data
-          # 取得台灣時間
-          DATE=$(date '+%Y%m%d')
           HOUR=$(date '+%H')
           DOW=$(date '+%u')
-          echo "台灣時間：$(date '+%Y-%m-%d %H:%M') 星期$DOW"
+          DATE=$(date '+%Y%m%d')
+          echo "台灣時間：$(date '+%Y-%m-%d %H:%M') 星期$DOW 小時$HOUR"
+
+          # 若不是 22:00 後（排程時間），往回推一個交易日
+          if [ "$HOUR" -lt "18" ]; then
+            DATE=$(date -d 'yesterday' '+%Y%m%d')
+            DOW=$(date -d 'yesterday' '+%u')
+          fi
 
           # 跳過週末
           if [ "$DOW" = "6" ]; then
-            DATE=$(date -d '1 day ago' '+%Y%m%d')
+            DATE=$(date -d "$DATE - 1 day" '+%Y%m%d')
           elif [ "$DOW" = "7" ]; then
-            DATE=$(date -d '2 days ago' '+%Y%m%d')
-          fi
-
-          # 若還沒收盤（15點前），抓前一個交易日
-          if [ "$HOUR" -lt "15" ]; then
-            DATE=$(date -d "$(echo $DATE | sed 's/\(....\)\(..\)\(..\)/\1-\2-\3/') 1 day ago" '+%Y%m%d')
-            # 再次跳過週末
-            DOW_CHECK=$(date -d "$(echo $DATE | sed 's/\(....\)\(..\)\(..\)/\1-\2-\3/')" '+%u')
-            if [ "$DOW_CHECK" = "6" ]; then
-              DATE=$(date -d "$(echo $DATE | sed 's/\(....\)\(..\)\(..\)/\1-\2-\3/') 1 day ago" '+%Y%m%d')
-            elif [ "$DOW_CHECK" = "7" ]; then
-              DATE=$(date -d "$(echo $DATE | sed 's/\(....\)\(..\)\(..\)/\1-\2-\3/') 2 days ago" '+%Y%m%d')
-            fi
+            DATE=$(date -d "$DATE - 2 days" '+%Y%m%d')
           fi
 
           echo "最近交易日：$DATE"
